@@ -53,4 +53,6 @@ const TableToExcel = (function(Parser) {
 })(Parser);
 
 export default TableToExcel;
-window.TableToExcel = TableToExcel;
+
+exports.TableToExcel = TableToExcel;
+exports.Parser = Parser;
