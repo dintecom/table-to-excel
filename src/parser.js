@@ -6,77 +6,134 @@ const TTEParser = (function() {
    * @param {object} ws The worksheet object
    * @param {HTML entity} table The table to be converted to excel sheet
    */
-  methods.parseDomToTable = function(ws, table, opts) {
+  methods.parseDomToTable = function(ws, htmlElement, opts) {
     let _r, _c, cs, rs, r, c;
-    let rows = [...table.getElementsByTagName("tr")];
-    let widths = table.getAttribute("data-cols-width");
-    if (widths)
-      widths = widths.split(",").map(function(item) {
-        return parseInt(item);
-      });
-    let merges = [];
-    for (_r = 0; _r < rows.length; ++_r) {
-      let row = rows[_r];
-      r = _r + 1; // Actual excel row number
+    let tableObject = htmlElement.tagName === "TABLE";
+    if (tableObject) {
+      let rows = [...htmlElement.getElementsByTagName("tr")];
+      let widths = htmlElement.getAttribute("data-cols-width");
+      if (widths) {
+        widths = widths.split(",").map(function (item) {
+          return parseInt(item);
+        });
+      }
+      let merges = [];
+      let wsRowCount = ws.rowCount;
+      for (_r = 0; _r < rows.length; ++_r) {
+        let row = rows[_r];
+        r = wsRowCount + _r + 1; // Actual excel row number
+        c = 1; // Actual excel col number
+        if (row.getAttribute("data-exclude") === "true") {
+          rows.splice(_r, 1);
+          _r--;
+          continue;
+        }
+        if (row.getAttribute("data-height")) {
+          let exRow = ws.getRow(r);
+          exRow.height = parseFloat(row.getAttribute("data-height"));
+        }
+
+        let tds = [...row.children];
+        for (_c = 0; _c < tds.length; ++_c) {
+          let td = tds[_c];
+          if (td.getAttribute("data-exclude") === "true") {
+            tds.splice(_c, 1);
+            _c--;
+            continue;
+          }
+          for (let _m = 0; _m < merges.length; ++_m) {
+            var m = merges[_m];
+            if (m.s.c == c && m.s.r <= r && r <= m.e.r) {
+              c = m.e.c + 1;
+              _m = -1;
+            }
+          }
+          let exCell = ws.getCell(getColumnAddress(c, r));
+          // calculate merges
+          cs = parseInt(td.getAttribute("colspan")) || 1;
+          rs = parseInt(td.getAttribute("rowspan")) || 1;
+          if (cs > 1 || rs > 1) {
+            merges.push({
+              s: { c: c, r: r },
+              e: { c: c + cs - 1, r: r + rs - 1 }
+            });
+          }
+          c += cs;
+          exCell.value = getValue(td, tableObject);
+          if (!opts.autoStyle) {
+            let styles = getStylesDataAttr(td);
+            exCell.font = styles.font || null;
+            exCell.alignment = styles.alignment || null;
+            exCell.border = styles.border || null;
+            exCell.fill = styles.fill || null;
+            exCell.numFmt = styles.numFmt || null;
+          }
+        }
+      }
+      //Setting column width
+      if (widths) {
+        widths.forEach((width, _i) => {
+          ws.columns[_i].width = width;
+        });
+      }
+      applyMerges(ws, merges);
+      return ws;
+    }
+    else {
+      let widths = htmlElement.getAttribute("data-cols-width");
+      if (widths) {
+        widths = widths.split(",").map(function (item) {
+          return parseInt(item);
+        });
+      }
+      let merges = [];
+      _r = 0;
+      let row = htmlElement;
+      r = ws.rowCount + _r + 1; // Actual excel row number
       c = 1; // Actual excel col number
       if (row.getAttribute("data-exclude") === "true") {
-        rows.splice(_r, 1);
-        _r--;
-        continue;
+        return ws;
       }
       if (row.getAttribute("data-height")) {
         let exRow = ws.getRow(r);
         exRow.height = parseFloat(row.getAttribute("data-height"));
       }
 
-      let tds = [...row.children];
-      for (_c = 0; _c < tds.length; ++_c) {
-        let td = tds[_c];
-        if (td.getAttribute("data-exclude") === "true") {
-          tds.splice(_c, 1);
-          _c--;
-          continue;
+      for (let _m = 0; _m < merges.length; ++_m) {
+        var m = merges[_m];
+        if (m.s.c == c && m.s.r <= r && r <= m.e.r) {
+          c = m.e.c + 1;
+          _m = -1;
         }
-        for (let _m = 0; _m < merges.length; ++_m) {
-          var m = merges[_m];
-          if (m.s.c == c && m.s.r <= r && r <= m.e.r) {
-            c = m.e.c + 1;
-            _m = -1;
-          }
-        }
-        let exCell = ws.getCell(getColumnAddress(c, r));
-        // calculate merges
-        cs = parseInt(td.getAttribute("colspan")) || 1;
-        rs = parseInt(td.getAttribute("rowspan")) || 1;
-        if (cs > 1 || rs > 1) {
-          merges.push({
-            s: { c: c, r: r },
-            e: { c: c + cs - 1, r: r + rs - 1 }
-          });
-        }
-        c += cs;
-        exCell.value = getValue(td);
-        if (!opts.autoStyle) {
-          let styles = getStylesDataAttr(td);
-          exCell.font = styles.font || null;
-          exCell.alignment = styles.alignment || null;
-          exCell.border = styles.border || null;
-          exCell.fill = styles.fill || null;
-          exCell.numFmt = styles.numFmt || null;
-        }
-        // // If first row, set width of the columns.
-        // if (_r == 0) {
-        //   // ws.columns[_c].width = Math.round(tds[_c].offsetWidth / 7.2); // convert pixel to character width
-        // }
       }
+      let exCell = ws.getCell(getColumnAddress(c, r));
+      // calculate merges
+      cs = parseInt(row.getAttribute("colspan")) || 1;
+      rs = parseInt(row.getAttribute("rowspan")) || 1;
+      if (cs > 1 || rs > 1) {
+        merges.push({
+          s: { c: c, r: r },
+          e: { c: c + cs - 1, r: r + rs - 1 }
+        });
+      }
+      c += cs;
+      exCell.value = getValue(row, tableObject);
+      if (!opts.autoStyle) {
+        let styles = getStylesDataAttr(row);
+        exCell.font = styles.font || null;
+        exCell.alignment = styles.alignment || null;
+        exCell.border = styles.border || null;
+        exCell.fill = styles.fill || null;
+        exCell.numFmt = styles.numFmt || null;
+      }
+      //Setting column width
+      if (widths)
+        widths.forEach((width, _i) => {
+          ws.columns[_i].width = width;
+        });
+      applyMerges(ws, merges);
+      return ws;
     }
-    //Setting column width
-    if (widths)
-      widths.forEach((width, _i) => {
-        ws.columns[_i].width = width;
-      });
-    applyMerges(ws, merges);
-    return ws;
   };
 
   /**
@@ -140,12 +197,12 @@ const TTEParser = (function() {
   };
 
   /**
-   * Checks the data type specified and conerts the value to it.
+   * Checks the data type specified and converts the value to it.
    * @param {HTML entity} td
    */
-  let getValue = function(td) {
+  let getValue = function(td, tableObject) {
     let dataType = td.getAttribute("data-t");
-    let rawVal = htmldecode(td.innerHTML);
+    let rawVal= tableObject ? htmldecode(td.innerHTML) : td.innerText;
     if (dataType) {
       let val;
       switch (dataType) {
