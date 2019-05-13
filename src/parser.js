@@ -1,4 +1,4 @@
-const TTEParser = (function() {
+const Parser = (function () {
   let methods = {};
 
   /**
@@ -6,7 +6,7 @@ const TTEParser = (function() {
    * @param {object} ws The worksheet object
    * @param {HTML entity} table The table to be converted to excel sheet
    */
-  methods.parseDomToTable = function(ws, htmlElement, opts) {
+  methods.parseDomToTable = function (ws, htmlElement, opts) {
     let _r, _c, cs, rs, r, c;
     let tableObject = htmlElement.tagName === "TABLE";
     if (tableObject) {
@@ -67,6 +67,14 @@ const TTEParser = (function() {
             exCell.border = styles.border || null;
             exCell.fill = styles.fill || null;
             exCell.numFmt = styles.numFmt || null;
+            //Auto-detecting currency
+            if (exCell.numFmt == null && typeof exCell.value == "string") {
+              let cellValueWithoutSpaces = exCell.value.replace(/ /g, '').replace(/\,/g, '');
+              const regex = /^\$[0-9]+(\.[0-9]{1,2})?$/;
+              if (regex.test(cellValueWithoutSpaces)) {
+                exCell.numFmt = "$#,##0.00";
+              }
+            }
           }
         }
       }
@@ -125,6 +133,14 @@ const TTEParser = (function() {
         exCell.border = styles.border || null;
         exCell.fill = styles.fill || null;
         exCell.numFmt = styles.numFmt || null;
+        //Auto-detecting currency
+        if (exCell.numFmt == null && typeof exCell.value == "string") {
+          let cellValueWithoutSpaces = exCell.value.replace(/ /g, '').replace(/\,/g, '');
+          const regex = /^\$[0-9]+(\.[0-9]{1,2})?$/;
+          if (regex.test(cellValueWithoutSpaces)) {
+            exCell.numFmt = "$#,##0.00";
+          }
+        }
       }
       //Setting column width
       if (widths)
@@ -141,14 +157,14 @@ const TTEParser = (function() {
    * @param {object} ws The worksheet object
    * @param {object[]} merges array of merges
    */
-  let applyMerges = function(ws, merges) {
+  let applyMerges = function (ws, merges) {
     merges.forEach(m => {
       ws.mergeCells(
         getExcelColumnName(m.s.c) +
-          m.s.r +
-          ":" +
-          getExcelColumnName(m.e.c) +
-          m.e.r
+        m.s.r +
+        ":" +
+        getExcelColumnName(m.e.c) +
+        m.e.r
       );
     });
   };
@@ -156,7 +172,7 @@ const TTEParser = (function() {
   /**
    * Convert HTML to plain text
    */
-  let htmldecode = (function() {
+  let htmldecode = (function () {
     let entities = [
       ["nbsp", " "],
       ["middot", "·"],
@@ -165,7 +181,7 @@ const TTEParser = (function() {
       ["gt", ">"],
       ["lt", "<"],
       ["amp", "&"]
-    ].map(function(x) {
+    ].map(function (x) {
       return [new RegExp("&" + x[0] + ";", "g"), x[1]];
     });
     return function htmldecode(str) {
@@ -185,14 +201,14 @@ const TTEParser = (function() {
    * @param {number} num  The positive integer to convert to a column name.
    * @return {string}  The column name.
    */
-  let getExcelColumnName = function(num) {
+  let getExcelColumnName = function (num) {
     for (var ret = "", a = 1, b = 26; (num -= a) >= 0; a = b, b *= 26) {
       ret = String.fromCharCode(parseInt((num % b) / a) + 65) + ret;
     }
     return ret;
   };
 
-  let getColumnAddress = function(col, row) {
+  let getColumnAddress = function (col, row) {
     return getExcelColumnName(col) + row;
   };
 
@@ -200,13 +216,14 @@ const TTEParser = (function() {
    * Checks the data type specified and converts the value to it.
    * @param {HTML entity} td
    */
-  let getValue = function(td, tableObject) {
+  let getValue = function (td, tableObject) {
     let dataType = td.getAttribute("data-t");
-    let rawVal= tableObject ? htmldecode(td.innerHTML) : td.innerText;
+    let rawVal = tableObject ? htmldecode(td.innerHTML) : td.innerText;
     if (dataType) {
       let val;
       switch (dataType) {
         case "n": //number
+          rawVal = rawVal.replace(/[^0-9\+\-\.]/g, "")
           val = Number(rawVal);
           break;
         case "d": //date
@@ -217,8 +234,8 @@ const TTEParser = (function() {
             rawVal.toLowerCase() === "true"
               ? true
               : rawVal.toLowerCase() === "false"
-              ? false
-              : Boolean(parseInt(rawVal));
+                ? false
+                : Boolean(parseInt(rawVal));
           break;
         default:
           val = rawVal;
@@ -236,17 +253,61 @@ const TTEParser = (function() {
   };
 
   /**
+   * Convert computed colors to hex ARGB
+   * @param {string} computedColor Computed color string from getPropertyValue()
+   */
+  let getHexArgbColor = function (computedColor) {
+    //if RGB then convert to RGBA
+    let computedColorStr = computedColor;
+    if (computedColorStr.indexOf('a') == -1) {
+      computedColorStr = computedColorStr.replace(')', ', 1)').replace('rgb', 'rgba');
+    }
+
+    let rgbaValues = computedColorStr.split("(")[1].split(")")[0].split(",");
+
+    let r = (+rgbaValues[0]).toString(16),
+      g = (+rgbaValues[1]).toString(16),
+      b = (+rgbaValues[2]).toString(16),
+      a = Math.round(+rgbaValues[3] * 255).toString(16);
+
+    if (a == 0) { return "" }
+
+    if (r.length == 1)
+      r = "0" + r;
+    if (g.length == 1)
+      g = "0" + g;
+    if (b.length == 1)
+      b = "0" + b;
+    // if (a.length == 1)
+    //   a = "0" + a;
+
+    return "F" + r.toUpperCase() + g.toUpperCase() + b.toUpperCase();
+  };
+
+  /**
    * Prepares the style object for a cell using the data attributes
    * @param {HTML entity} td
    */
-  let getStylesDataAttr = function(td) {
+  let getStylesDataAttr = function (td) {
+    let cssComputedStyles = window.getComputedStyle(td, null);
     //Font attrs
     let font = {};
     if (td.getAttribute("data-f-name"))
       font.name = td.getAttribute("data-f-name");
     if (td.getAttribute("data-f-sz")) font.size = td.getAttribute("data-f-sz");
-    if (td.getAttribute("data-f-color"))
-      font.color = { argb: td.getAttribute("data-f-color") };
+    if (td.getAttribute("data-f-color")) {
+      if (td.getAttribute("data-f-color") != "none") {
+        font.color = { argb: td.getAttribute("data-f-color") };
+      }
+    }
+    else {
+      //Set css color style by default
+      let computedColor = cssComputedStyles.getPropertyValue("color");
+      let convertedColor = getHexArgbColor(computedColor)
+      if (convertedColor != "") {
+        font.color = { argb: convertedColor };
+      }
+    }
     if (td.getAttribute("data-f-bold") === "true") font.bold = true;
     if (td.getAttribute("data-f-italic") === "true") font.italic = true;
     if (td.getAttribute("data-f-underline") === "true") font.underline = true;
@@ -256,9 +317,20 @@ const TTEParser = (function() {
     let alignment = {};
     if (td.getAttribute("data-a-h"))
       alignment.horizontal = td.getAttribute("data-a-h");
-    if (td.getAttribute("data-a-v"))
+    if (td.getAttribute("data-a-v")) {
       alignment.vertical = td.getAttribute("data-a-v");
-    if (td.getAttribute("data-a-wrap") === "true") alignment.wrapText = true;
+    }
+    else {
+      // By default
+      alignment.vertical = "middle";
+    }
+    if (td.getAttribute("data-a-wrap") === "false") {
+      alignment.wrapText = false;
+    }
+    else {
+      // By default
+      alignment.wrapText = true;
+    }
     if (td.getAttribute("data-a-text-rotation"))
       alignment.textRotation = td.getAttribute("data-a-text-rotation");
     if (td.getAttribute("data-a-indent"))
@@ -275,11 +347,20 @@ const TTEParser = (function() {
     };
 
     if (td.getAttribute("data-b-a-s")) {
-      let style = td.getAttribute("data-b-a-s");
-      border.top.style = style;
-      border.left.style = style;
-      border.bottom.style = style;
-      border.right.style = style;
+      if (td.getAttribute("data-b-a-s") != "none") {
+        let style = td.getAttribute("data-b-a-s");
+        border.top.style = style;
+        border.left.style = style;
+        border.bottom.style = style;
+        border.right.style = style;
+      }
+    }
+    else {
+      // By default
+      border.top.style = "thin";
+      border.left.style = "thin";
+      border.bottom.style = "thin";
+      border.right.style = "thin";
     }
     if (td.getAttribute("data-b-a-c")) {
       let color = { argb: td.getAttribute("data-b-a-c") };
@@ -312,12 +393,27 @@ const TTEParser = (function() {
     //Fill
     let fill;
     if (td.getAttribute("data-fill-color")) {
-      fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: td.getAttribute("data-fill-color") }
-      };
+      if (td.getAttribute("data-fill-color") != "none") {
+        fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: td.getAttribute("data-fill-color") }
+        };
+      }
     }
+    else {
+      //Set css color style by default
+      let computedBackgroundColor = cssComputedStyles.getPropertyValue("background-color");
+      let convertedBackgroundColor = getHexArgbColor(computedBackgroundColor)
+      if (convertedBackgroundColor != "") {
+        fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: convertedBackgroundColor }
+        };
+      }
+    }
+
     //number format
     let numFmt;
     if (td.getAttribute("data-num-fmt"))
@@ -335,4 +431,4 @@ const TTEParser = (function() {
   return methods;
 })();
 
-export default TTEParser;
+export default Parser;
