@@ -72,6 +72,8 @@ const Parser = (function () {
               let cellValueWithoutSpaces = exCell.value.replace(/ /g, '').replace(/\,/g, '');
               const regex = /^\$[0-9]+(\.[0-9]{1,2})?$/;
               if (regex.test(cellValueWithoutSpaces)) {
+                exCell.value = exCell.value.replace(/[^0-9\+\-\.]/g, "")
+                exCell.value = Number(exCell.value);
                 exCell.numFmt = "$#,##0.00";
               }
             }
@@ -138,6 +140,8 @@ const Parser = (function () {
           let cellValueWithoutSpaces = exCell.value.replace(/ /g, '').replace(/\,/g, '');
           const regex = /^\$[0-9]+(\.[0-9]{1,2})?$/;
           if (regex.test(cellValueWithoutSpaces)) {
+            exCell.value = exCell.value.replace(/[^0-9\+\-\.]/g, "")
+            exCell.value = Number(exCell.value);
             exCell.numFmt = "$#,##0.00";
           }
         }
