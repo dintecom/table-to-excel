@@ -5,6 +5,33 @@ import ExcelJS from "exceljs/dist/es5/exceljs.browser";
 const TableToExcel = (function(Parser) {
   let methods = {};
 
+  methods.getOptions = function() {
+    let opts = {
+      name: "export.xlsx",
+      autoStyle: false,
+      sheet: {
+        name: "Sheet 1"
+      },
+      useCss: {
+          fontColor: false,
+          backgroundColor: false
+      },
+      objectDefaults: {
+          alignment: {
+              vertical: 'bottom',
+              wrapText: false
+          },
+          borders: {
+            style: 'undefined'
+          }
+      },
+      autoDetecting: {
+          currency: false
+      }
+  };
+    return opts;
+  };
+
   methods.initWorkBook = function() {
     let wb = new ExcelJS.Workbook();
     return wb;
@@ -37,13 +64,7 @@ const TableToExcel = (function(Parser) {
   };
 
   methods.convert = function(table, opts = {}) {
-    let defaultOpts = {
-      name: "export.xlsx",
-      autoStyle: false,
-      sheet: {
-        name: "Sheet 1"
-      }
-    };
+    let defaultOpts = this.getOptions();
     opts = Object.assign({}, defaultOpts, opts);
     let wb = this.tableToBook(table, opts);
     this.save(wb, opts.name);

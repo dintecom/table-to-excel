@@ -1,3 +1,5 @@
+import TableToExcel from "./tableToExcel";
+
 const Parser = (function () {
   let methods = {};
 
@@ -7,6 +9,8 @@ const Parser = (function () {
    * @param {HTML entity} table The table to be converted to excel sheet
    */
   methods.parseDomToTable = function (ws, htmlElement, opts) {
+    let defaultOpts = TableToExcel.getOptions();
+    opts = Object.assign({}, defaultOpts, opts);
     let _r, _c, cs, rs, r, c;
     let tableObject = htmlElement.tagName === "TABLE";
     if (tableObject) {
@@ -61,14 +65,14 @@ const Parser = (function () {
           c += cs;
           exCell.value = getValue(td, tableObject);
           if (!opts.autoStyle) {
-            let styles = getStylesDataAttr(td);
+            let styles = getStylesDataAttr(td, opts);
             exCell.font = styles.font || null;
             exCell.alignment = styles.alignment || null;
             exCell.border = styles.border || null;
             exCell.fill = styles.fill || null;
             exCell.numFmt = styles.numFmt || null;
-            //Auto-detecting currency
-            if (exCell.numFmt == null && typeof exCell.value == "string") {
+            //Auto-detecting currency from options
+            if (opts.autoDetecting.currency && exCell.numFmt == null && typeof exCell.value == "string") {
               let cellValueWithoutSpaces = exCell.value.replace(/ /g, '').replace(/\,/g, '');
               const regex = /^(\+|\-)?\$[0-9]+(\.[0-9]{1,2})?$/;
               if (regex.test(cellValueWithoutSpaces)) {
@@ -129,14 +133,14 @@ const Parser = (function () {
       c += cs;
       exCell.value = getValue(row, tableObject);
       if (!opts.autoStyle) {
-        let styles = getStylesDataAttr(row);
+        let styles = getStylesDataAttr(row, opts);
         exCell.font = styles.font || null;
         exCell.alignment = styles.alignment || null;
         exCell.border = styles.border || null;
         exCell.fill = styles.fill || null;
         exCell.numFmt = styles.numFmt || null;
-        //Auto-detecting currency
-        if (exCell.numFmt == null && typeof exCell.value == "string") {
+        //Auto-detecting currency from options
+        if (opts.autoDetecting.currency && exCell.numFmt == null && typeof exCell.value == "string") {
           let cellValueWithoutSpaces = exCell.value.replace(/ /g, '').replace(/\,/g, '');
           const regex = /^(\+|\-)?\$[0-9]+(\.[0-9]{1,2})?$/;
           if (regex.test(cellValueWithoutSpaces)) {
@@ -292,7 +296,7 @@ const Parser = (function () {
    * Prepares the style object for a cell using the data attributes
    * @param {HTML entity} td
    */
-  let getStylesDataAttr = function (td) {
+  let getStylesDataAttr = function (td, opts) {
     let cssComputedStyles = window.getComputedStyle(td, null);
     //Font attrs
     let font = {};
@@ -305,11 +309,13 @@ const Parser = (function () {
       }
     }
     else {
-      //Set css color style by default
-      let computedColor = cssComputedStyles.getPropertyValue("color");
-      let convertedColor = getHexArgbColor(computedColor)
-      if (convertedColor != "") {
-        font.color = { argb: convertedColor };
+      //Set css font color from options
+      if (opts.useCss.fontColor) {
+        let computedColor = cssComputedStyles.getPropertyValue("color");
+        let convertedColor = getHexArgbColor(computedColor)
+        if (convertedColor != "") {
+          font.color = { argb: convertedColor };
+        }
       }
     }
     if (td.getAttribute("data-f-bold") === "true") font.bold = true;
@@ -325,15 +331,19 @@ const Parser = (function () {
       alignment.vertical = td.getAttribute("data-a-v");
     }
     else {
-      // By default
-      alignment.vertical = "middle";
+      // Set vertical alignment from options
+      if (opts.objectDefaults.alignment.vertical != "bottom") {
+        alignment.vertical = opts.objectDefaults.alignment.vertical;
+      }
     }
-    if (td.getAttribute("data-a-wrap") === "false") {
-      alignment.wrapText = false;
+    if (td.getAttribute("data-a-wrap")) {
+      alignment.wrapText = td.getAttribute("data-a-wrap");
     }
     else {
-      // By default
-      alignment.wrapText = true;
+      // Set text wrapping from options
+      if (opts.objectDefaults.alignment.wrapText != false) {
+        alignment.wrapText = true;
+      }
     }
     if (td.getAttribute("data-a-text-rotation"))
       alignment.textRotation = td.getAttribute("data-a-text-rotation");
@@ -360,11 +370,13 @@ const Parser = (function () {
       }
     }
     else {
-      // By default
-      border.top.style = "thin";
-      border.left.style = "thin";
-      border.bottom.style = "thin";
-      border.right.style = "thin";
+      // Set borders style from options
+      if (opts.objectDefaults.borders.style != 'undefined') {
+        border.top.style = opts.objectDefaults.borders.style;
+        border.left.style = opts.objectDefaults.borders.style;
+        border.bottom.style = opts.objectDefaults.borders.style;
+        border.right.style = opts.objectDefaults.borders.style;
+      }
     }
     if (td.getAttribute("data-b-a-c")) {
       let color = { argb: td.getAttribute("data-b-a-c") };
@@ -406,15 +418,17 @@ const Parser = (function () {
       }
     }
     else {
-      //Set css color style by default
-      let computedBackgroundColor = cssComputedStyles.getPropertyValue("background-color");
-      let convertedBackgroundColor = getHexArgbColor(computedBackgroundColor)
-      if (convertedBackgroundColor != "") {
-        fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: convertedBackgroundColor }
-        };
+      //Set css background color from options
+      if (opts.useCss.backgroundColor) {
+        let computedBackgroundColor = cssComputedStyles.getPropertyValue("background-color");
+        let convertedBackgroundColor = getHexArgbColor(computedBackgroundColor)
+        if (convertedBackgroundColor != "") {
+          fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: convertedBackgroundColor }
+          };
+        }
       }
     }
 
