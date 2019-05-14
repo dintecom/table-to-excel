@@ -1,6 +1,6 @@
 import Parser from "./parser";
 import saveAs from "file-saver";
-import ExcelJS from "../node_modules/exceljs/dist/es5/exceljs.browser";
+import ExcelJS from "exceljs/dist/es5/exceljs.browser";
 
 const TableToExcel = (function(Parser) {
   let methods = {};
@@ -44,7 +44,7 @@ const TableToExcel = (function(Parser) {
         name: "Sheet 1"
       }
     };
-    opts = { ...defaultOpts, ...opts };
+    opts = Object.assign({}, defaultOpts, opts);
     let wb = this.tableToBook(table, opts);
     this.save(wb, opts.name);
   };
@@ -53,6 +53,3 @@ const TableToExcel = (function(Parser) {
 })(Parser);
 
 export default TableToExcel;
-
-exports.TableToExcel = TableToExcel;
-exports.Parser = Parser;
