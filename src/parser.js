@@ -70,7 +70,7 @@ const Parser = (function () {
             //Auto-detecting currency
             if (exCell.numFmt == null && typeof exCell.value == "string") {
               let cellValueWithoutSpaces = exCell.value.replace(/ /g, '').replace(/\,/g, '');
-              const regex = /^\$[0-9]+(\.[0-9]{1,2})?$/;
+              const regex = /^(\+|\-)?\$[0-9]+(\.[0-9]{1,2})?$/;
               if (regex.test(cellValueWithoutSpaces)) {
                 exCell.value = exCell.value.replace(/[^0-9\+\-\.]/g, "")
                 exCell.value = Number(exCell.value);
@@ -138,7 +138,7 @@ const Parser = (function () {
         //Auto-detecting currency
         if (exCell.numFmt == null && typeof exCell.value == "string") {
           let cellValueWithoutSpaces = exCell.value.replace(/ /g, '').replace(/\,/g, '');
-          const regex = /^\$[0-9]+(\.[0-9]{1,2})?$/;
+          const regex = /^(\+|\-)?\$[0-9]+(\.[0-9]{1,2})?$/;
           if (regex.test(cellValueWithoutSpaces)) {
             exCell.value = exCell.value.replace(/[^0-9\+\-\.]/g, "")
             exCell.value = Number(exCell.value);
